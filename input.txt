@@ -1,9 +1,11 @@
-Chapter: First
-There is a first chapter.
-It has two lines.
+<h1>CHAPTER 1
+</h1>
 
-Chapter: Second
-The second chapter.
+<body>Body text
+</body>
 
-Chapter: Third
-There is more content here.
+<footer>Footnote
+</footer>
+
+<bodyquote>Quote
+</bodyquote>

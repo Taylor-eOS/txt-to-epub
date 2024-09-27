@@ -1,135 +1,190 @@
 import os
 import zipfile
 import uuid
+import re
+from pathlib import Path
+from epub_strings import (
+    STYLESHEET_CONTENT,
+    CONTAINER_XML,
+    COVER_XHTML,
+    NCX_TEMPLATE,
+    CONTENT_OPF_TEMPLATE,
+    XHTML_TEMPLATE
+)
+from utils import continues_block
 
-def create_epub(txt_file):
-    book_title = "Your Book Title"
-    author = "Your Name"
-    language = "en"
+def create_epub():
+    book_title = input("Enter the book title: ").strip()
+    author = input("Enter the author name: ").strip()
+    language = input("Enter the language (default 'en'): ").strip() or "en"
+    cover_image = 'cover.jpg' if Path('cover.jpg').is_file() else None
     unique_id = str(uuid.uuid4())
+    epub_filename = f"{'_'.join(book_title.split())}.epub"
 
-    def create_chapter_files(txt_file):
+    def parse_input(txt_file):
         with open(txt_file, 'r', encoding='utf-8') as f:
             lines = f.readlines()
 
         chapters = []
-        chapter_title = None
-        chapter_content = []
+        chapter_stack = []
+        current_chapter = {'title': None, 'body': [], 'footnotes': [], 'quotes': [], 'subchapters': []}
+        current_tag = None
 
         for line in lines:
-            if line.startswith("Chapter: "):
-                if chapter_title:
-                    chapters.append((chapter_title, ''.join(chapter_content)))
-                chapter_title = line.strip().replace("Chapter: ", "")
-                chapter_content = []
+            line = line.strip()
+            if line.startswith('<h1>'):
+                if current_chapter['title']:
+                    if chapter_stack:
+                        chapter_stack[-1]['subchapters'].append(current_chapter)
+                    else:
+                        chapters.append(current_chapter)
+                    current_chapter = {'title': None, 'body': [], 'footnotes': [], 'quotes': [], 'subchapters': []}
+                current_chapter['title'] = line[4:]
+                current_tag = 'h1'
+            elif line.startswith('</h1>'):
+                current_tag = None
+            elif line.startswith('<body>'):
+                current_tag = 'body'
+                body_content = line[6:]
+                if body_content:
+                    current_chapter['body'].append(body_content)
+            elif line.startswith('</body>'):
+                current_tag = None
+            elif line.startswith('<footer>'):
+                current_tag = 'footer'
+                footer_content = line[8:]
+                if footer_content:
+                    current_chapter['footnotes'].append(footer_content)
+            elif line.startswith('</footer>'):
+                current_tag = None
+            elif line.startswith('<blockquote>'):
+                current_tag = 'blockquote'
+                quote_content = line[11:]
+                if quote_content:
+                    current_chapter['quotes'].append(quote_content)
+            elif line.startswith('</blockquote>'):
+                current_tag = None
             else:
-                chapter_content.append(line)
+                if current_tag == 'body':
+                    current_chapter['body'].append(line)
+                elif current_tag == 'footer':
+                    current_chapter['footnotes'].append(line)
+                elif current_tag == 'blockquote':
+                    current_chapter['quotes'].append(line)
 
-        if chapter_title:
-            chapters.append((chapter_title, ''.join(chapter_content)))
+        if current_chapter['title']:
+            if chapter_stack:
+                chapter_stack[-1]['subchapters'].append(current_chapter)
+            else:
+                chapters.append(current_chapter)
 
         return chapters
 
-    def create_xhtml_file(title, content, chapter_index):
-        xhtml_content = f'''<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-  <title>{title}</title>
-  <link href="stylesheet.css" rel="stylesheet" type="text/css" />
-</head>
-<body>
-  <h1>{title}</h1>
-  {content}
-</body>
-</html>'''
-        filename = f"chapter{chapter_index}.xhtml"
-        with open(os.path.join('OEBPS', filename), 'w', encoding='utf-8') as file:
-            file.write(xhtml_content)
+    def create_stylesheet():
+        with open(os.path.join('OEBPS', 'stylesheet.css'), 'w', encoding='utf-8') as file:
+            file.write(STYLESHEET_CONTENT)
+
+    def create_chapter_files(chapters):
+        def recurse_chapters(chapters, parent_id=""):
+            for i, chapter in enumerate(chapters, start=1):
+                chapter_id = f"{parent_id}{i}"
+                content = ""
+                previous_sentence = ""
+                for block in chapter['body']:
+                    sentences = re.split(r'(?<=[\.!\?])\s+', block)
+                    for sentence in sentences:
+                        status = continues_block(previous_sentence, sentence)
+                        if status in ['continues_word', 'continues_sentence']:
+                            if content.endswith('</p>\n'):
+                                content = content[:-5] + ' ' + sentence + '</p>\n'
+                            else:
+                                content += sentence + ' '
+                        else:
+                            content += f'<p>{sentence}</p>\n'
+                        previous_sentence = sentence
+                for quote in chapter['quotes']:
+                    content += f'<blockquote>{quote}</blockquote>\n'
+                if chapter['footnotes']:
+                    content += '<div class="footer">\n'
+                    for footnote in chapter['footnotes']:
+                        content += f'<p>{footnote}</p>\n'
+                    content += '</div>\n'
+                xhtml_content = XHTML_TEMPLATE.format(title=chapter["title"], content=content)
+                filename = f"chapter{chapter_id}.xhtml"
+                with open(os.path.join('OEBPS', filename), 'w', encoding='utf-8') as file:
+                    file.write(xhtml_content)
+                if chapter['subchapters']:
+                    recurse_chapters(chapter['subchapters'], parent_id=f"{chapter_id}-")
+
+        recurse_chapters(chapters)
+
+    def create_toc_ncx(chapters, parent_id=""):
+        nav_points = ""
+        for i, chapter in enumerate(chapters, start=1):
+            nav_id = f"{parent_id}navPoint-{i}" if parent_id else f"navPoint-{i}"
+            play_order = f"{parent_id}{i}" if parent_id else f"{i}"
+            content_src = f"chapter{parent_id}{i}.xhtml" if parent_id else f"chapter{i}.xhtml"
+            nav_points += f'''<navPoint id="{nav_id}" playOrder="{play_order}">
+      <navLabel>
+        <text>{chapter["title"]}</text>
+      </navLabel>
+      <content src="{content_src}"/>
+    '''
+            if chapter['subchapters']:
+                nav_points += create_toc_ncx(chapter['subchapters'], parent_id=f"{i}-")
+            nav_points += '</navPoint>\n'
+        return nav_points
 
     def create_content_opf(chapters):
-        manifest_items = '\n'.join([f'<item id="chapter{i}" href="chapter{i}.xhtml" media-type="application/xhtml+xml"/>' for i in range(1, len(chapters) + 1)])
-        spine_items = '\n'.join([f'<itemref idref="chapter{i}"/>' for i in range(1, len(chapters) + 1)])
+        def recurse_manifest(chapters, parent_id=""):
+            manifest = ""
+            for i, chapter in enumerate(chapters, start=1):
+                chapter_id = f"{parent_id}{i}"
+                manifest += f'<item id="chapter{chapter_id}" href="chapter{chapter_id}.xhtml" media-type="application/xhtml+xml"/>\n'
+                if chapter['subchapters']:
+                    manifest += recurse_manifest(chapter['subchapters'], parent_id=f"{chapter_id}-")
+            return manifest
 
-        content_opf = f'''<?xml version="1.0" encoding="UTF-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookID" version="2.0">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:title>{book_title}</dc:title>
-    <dc:creator>{author}</dc:creator>
-    <dc:language>{language}</dc:language>
-    <dc:identifier id="BookID">urn:uuid:{unique_id}</dc:identifier>
-  </metadata>
-  <manifest>
-    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
-    <item id="css" href="stylesheet.css" media-type="text/css"/>
-    {manifest_items}
-  </manifest>
-  <spine toc="ncx">
-    {spine_items}
-  </spine>
-</package>'''
+        manifest_items = recurse_manifest(chapters)
+        spine_items = ""
+        def recurse_spine(chapters, parent_id=""):
+            spine = ""
+            for i, chapter in enumerate(chapters, start=1):
+                chapter_id = f"{parent_id}{i}"
+                spine += f'<itemref idref="chapter{chapter_id}"/>\n'
+                if chapter['subchapters']:
+                    spine += recurse_spine(chapter['subchapters'], parent_id=f"{chapter_id}-")
+            return spine
 
+        spine_items = recurse_spine(chapters)
+        cover_manifest = ''
+        cover_meta = ''
+        if cover_image:
+            manifest_items += f'<item id="cover" href="cover.jpg" media-type="image/jpeg"/>\n'
+            manifest_items += '<item id="cover-page" href="cover.xhtml" media-type="application/xhtml+xml"/>\n'
+            spine_items = f'<itemref idref="cover-page"/>\n' + spine_items
+            cover_meta = '<meta name="cover" content="cover"/>'
+        content_opf = CONTENT_OPF_TEMPLATE.format(
+            book_title=book_title,
+            author=author,
+            language=language,
+            unique_id=unique_id,
+            manifest_items=manifest_items.strip(),
+            spine_items=spine_items.strip(),
+            cover_manifest=cover_meta
+        )
         with open(os.path.join('OEBPS', 'content.opf'), 'w', encoding='utf-8') as file:
             file.write(content_opf)
 
-    def create_toc_ncx(chapters):
-        nav_points = '\n'.join([f'''<navPoint id="navPoint-{i}" playOrder="{i}">
-      <navLabel>
-        <text>{title}</text>
-      </navLabel>
-      <content src="chapter{i}.xhtml"/>
-    </navPoint>''' for i, (title, _) in enumerate(chapters, start=1)])
-
-        toc_ncx = f'''<?xml version="1.0" encoding="UTF-8"?>
-<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
-  <head>
-    <meta name="dtb:uid" content="urn:uuid:{unique_id}"/>
-    <meta name="dtb:depth" content="1"/>
-  </head>
-  <docTitle>
-    <text>{book_title}</text>
-  </docTitle>
-  <navMap>
-    {nav_points}
-  </navMap>
-</ncx>'''
-
-        with open(os.path.join('OEBPS', 'toc.ncx'), 'w', encoding='utf-8') as file:
-            file.write(toc_ncx)
-
-    def create_stylesheet():
-        stylesheet_content = '''body {
-  font-family: Arial, sans-serif;
-  line-height: 1.6;
-  margin: 0;
-  padding: 0;
-}
-
-h1, h2, h3 {
-  text-align: center;
-}
-
-p {
-  text-indent: 1.5em;
-  margin: 0 0 1em 0;
-}'''
-
-        with open(os.path.join('OEBPS', 'stylesheet.css'), 'w', encoding='utf-8') as file:
-            file.write(stylesheet_content)
+    def create_cover_page():
+        with open(os.path.join('OEBPS', 'cover.xhtml'), 'w', encoding='utf-8') as file:
+            file.write(COVER_XHTML)
 
     def create_container_xml():
-        container_xml = '''<?xml version="1.0" encoding="UTF-8"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
-  </rootfiles>
-</container>'''
-
-        os.makedirs('META-INF', exist_ok=True)
         with open(os.path.join('META-INF', 'container.xml'), 'w', encoding='utf-8') as file:
-            file.write(container_xml)
+            file.write(CONTAINER_XML)
 
-    def create_mimetype():
+    def create_mimetype_file():
         with open('mimetype', 'w', encoding='utf-8') as file:
             file.write('application/epub+zip')
 
@@ -139,23 +194,25 @@ p {
             for folder_name in ['META-INF', 'OEBPS']:
                 for root, dirs, files in os.walk(folder_name):
                     for file in files:
-                        epub.write(os.path.join(root, file))
+                        file_path = os.path.join(root, file)
+                        epub_path = os.path.relpath(file_path).replace('\\', '/')
+                        epub.write(file_path, arcname=epub_path, compress_type=zipfile.ZIP_DEFLATED)
+            if cover_image:
+                epub.write('cover.jpg', arcname='OEBPS/cover.jpg', compress_type=zipfile.ZIP_DEFLATED)
 
-    # Create necessary directories
     os.makedirs('OEBPS', exist_ok=True)
-
-    # Create files
-    create_mimetype()
+    os.makedirs('META-INF', exist_ok=True)
+    create_mimetype_file()
     create_container_xml()
-    chapters = create_chapter_files(txt_file)
-    for i, (title, content) in enumerate(chapters, start=1):
-        create_xhtml_file(title, content, i)
-    create_content_opf(chapters)
-    create_toc_ncx(chapters)
     create_stylesheet()
+    chapters = parse_input('input.txt')
+    create_chapter_files(chapters)
+    if cover_image:
+        create_cover_page()
+    create_toc_ncx(chapters)
+    create_content_opf(chapters)
+    create_epub_file(epub_filename)
+    print(f"EPUB creation complete: {epub_filename}")
 
-    # Create the epub file
-    create_epub_file('output.epub')
+create_epub()
 
-# Usage
-create_epub('input.txt')
