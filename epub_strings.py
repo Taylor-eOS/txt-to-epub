@@ -2,24 +2,24 @@
 STYLESHEET_CONTENT = '''body {
     font-family: Arial, sans-serif;
     line-height: 1.6;
-    margin: 0;
-    padding: 1em;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
 h1, h2, h3 {
     text-align: center;
     font-weight: bold;
-    margin-top: 1em;
-    margin-bottom: 0.5em;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
 }
 
 p {
     text-indent: 1.5em;
-    margin: 0;
+    margin: 0 !important;
 }
 
 blockquote {
-    margin: 1em 2em;
+    margin: 0 !important;
     font-style: italic;
     border-left: 4px solid #ccc;
     padding-left: 1em;
@@ -28,8 +28,9 @@ blockquote {
 .footer {
     font-size: 0.8em;
     color: #555;
-    margin-top: 1em;
+    margin-top: 0 !important;
 }'''
+
 
 CONTAINER_XML = '''<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -46,7 +47,7 @@ COVER_XHTML = '''<?xml version="1.0" encoding="UTF-8"?>
   <link href="stylesheet.css" rel="stylesheet" type="text/css" />
 </head>
 <body>
-  <div style="text-align: center; margin: 50px;">
+  <div style="text-align: center; padding: 5% !important;">
     <img src="cover.jpg" alt="Cover Image" style="max-width: 100%; height: auto;"/>
   </div>
 </body>
