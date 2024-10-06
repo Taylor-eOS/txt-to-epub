@@ -1,0 +1,1 @@
+This project takes text blocks from an input TXT and wraps it into an EPUB. It is a work in progress. The inout can be created using [maual-classifier](https://github.com/Taylor-eOS/manual-classifier).
