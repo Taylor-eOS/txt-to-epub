@@ -1,14 +1,19 @@
 <h1>CHAPTER 1
-</h1>
+</end>
+<1>
 
 <body>Body text
-</body>
+</end>
+<1>
 
 <body>More body text
-</body>
+</end>
+<2>
 
 <footer>Footnote
-</footer>
+</end>
+<2>
 
 <bodyquote>Quote
-</bodyquote>
+</end>
+<2>
