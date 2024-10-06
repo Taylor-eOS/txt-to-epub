@@ -4,6 +4,9 @@
 <body>Body text
 </body>
 
+<body>More body text
+</body>
+
 <footer>Footnote
 </footer>
 
