@@ -1,10 +1,11 @@
-# create_epub.py
-
 import os
 import zipfile
 import uuid
 import re
+import sys
+import shutil
 from pathlib import Path
+from utils import continues_block
 from epub_strings import (
     STYLESHEET_CONTENT,
     CONTAINER_XML,
@@ -13,7 +14,6 @@ from epub_strings import (
     CONTENT_OPF_TEMPLATE,
     XHTML_TEMPLATE
 )
-from utils import continues_block
 
 def create_epub():
     book_title = "Book Title"
@@ -34,31 +34,23 @@ def create_epub():
                 if chapter_data['title']:
                     chapters.append(chapter_data)
                     chapter_data = {'title': None, 'body': [], 'footnotes': [], 'quotes': []}
-                chapter_data['title'] = line[4:]
+                chapter_data['title'] = line[4:].rstrip('</h1>')
                 current_tag = 'h1'
-            elif line.startswith('</h1>'):
-                current_tag = None
             elif line.startswith('<body>'):
                 current_tag = 'body'
-                body_content = line[6:]
+                body_content = line[6:].rstrip('</body>')
                 if body_content:
                     chapter_data['body'].append(body_content)
-            elif line.startswith('</body>'):
-                current_tag = None
             elif line.startswith('<footer>'):
                 current_tag = 'footer'
-                footer_content = line[8:]
+                footer_content = line[8:].rstrip('</footer>')
                 if footer_content:
                     chapter_data['footnotes'].append(footer_content)
-            elif line.startswith('</footer>'):
-                current_tag = None
             elif line.startswith('<blockquote>'):
                 current_tag = 'blockquote'
-                quote_content = line[11:]
+                quote_content = line[11:].rstrip('</blockquote>')
                 if quote_content:
                     chapter_data['quotes'].append(quote_content)
-            elif line.startswith('</blockquote>'):
-                current_tag = None
             else:
                 if current_tag == 'body':
                     chapter_data['body'].append(line)
@@ -71,8 +63,11 @@ def create_epub():
         return chapters
 
     def create_stylesheet():
-        with open(os.path.join('OEBPS', 'stylesheet.css'), 'w', encoding='utf-8') as file:
-            file.write(STYLESHEET_CONTENT.replace("margin: 0;", "margin: 0 !important;").replace("padding: 1em;", "padding: 0 !important;"))
+        stylesheet_path = os.path.join('OEBPS', 'stylesheet.css')
+        if not Path(stylesheet_path).is_file():
+            with open(stylesheet_path, 'w', encoding='utf-8') as file:
+                file.write(STYLESHEET_CONTENT.replace("margin: 0;", "margin: 0 !important;")
+                                              .replace("padding: 1em;", "padding: 0 !important;"))
 
     def create_chapter_files(chapters):
         for i, chapter in enumerate(chapters, start=1):
@@ -99,30 +94,40 @@ def create_epub():
                 content += '</div>\n'
             xhtml_content = XHTML_TEMPLATE.format(title=chapter["title"], content=content)
             filename = f"chapter{i}.xhtml"
-            with open(os.path.join('OEBPS', filename), 'w', encoding='utf-8') as file:
-                file.write(xhtml_content)
+            chapter_path = os.path.join('OEBPS', filename)
+            if not Path(chapter_path).is_file():
+                with open(chapter_path, 'w', encoding='utf-8') as file:
+                    file.write(xhtml_content)
 
     def create_toc_ncx(chapters):
-        nav_points = '\n'.join([f'''<navPoint id="navPoint-{i}" playOrder="{i}">
-  <navLabel>
-    <text>{chapter["title"]}</text>
-  </navLabel>
-  <content src="chapter{i}.xhtml"/>
-</navPoint>''' for i, chapter in enumerate(chapters, start=1)])
+        nav_points = '\n'.join([
+            f'''<navPoint id="navPoint-{i}" playOrder="{i}">
+      <navLabel>
+        <text>{chapter["title"]}</text>
+      </navLabel>
+      <content src="chapter{i}.xhtml"/>
+    </navPoint>''' for i, chapter in enumerate(chapters, start=1)
+        ])
         toc_ncx = NCX_TEMPLATE.format(unique_id=unique_id, book_title=book_title, nav_points=nav_points)
-        with open(os.path.join('OEBPS', 'toc.ncx'), 'w', encoding='utf-8') as file:
-            file.write(toc_ncx)
+        toc_ncx_path = os.path.join('OEBPS', 'toc.ncx')
+        if not Path(toc_ncx_path).is_file():
+            with open(toc_ncx_path, 'w', encoding='utf-8') as file:
+                file.write(toc_ncx)
 
     def create_content_opf(chapters):
-        manifest_items = '\n'.join([f'<item id="chapter{i}" href="chapter{i}.xhtml" media-type="application/xhtml+xml"/>' for i in range(1, len(chapters) + 1)])
-        spine_items = '\n'.join([f'<itemref idref="chapter{i}"/>' for i in range(1, len(chapters) + 1)])
-        cover_manifest = ''
+        manifest_items = '\n'.join([
+            f'<item id="chapter{i}" href="chapter{i}.xhtml" media-type="application/xhtml+xml"/>' 
+            for i in range(1, len(chapters) + 1)
+        ])
+        spine_items = '\n'.join([
+            f'<itemref idref="chapter{i}"/>' for i in range(1, len(chapters) + 1)
+        ])
         cover_meta = ''
         if cover_image:
-            manifest_items += f'\n<item id="cover" href="cover.jpg" media-type="image/jpeg"/>'
-            manifest_items += '\n<item id="cover-page" href="cover.xhtml" media-type="application/xhtml+xml"/>'
-            cover_meta = '<meta name="cover" content="cover"/>'
-            spine_items = f'<itemref idref="cover-page"/>\n' + spine_items
+            manifest_items += '\n<item id="cover-image" href="cover.jpg" media-type="image/jpeg"/>'
+            manifest_items += '\n<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>'
+            cover_meta = '<meta name="cover" content="cover-image"/>'
+            spine_items = f'<itemref idref="cover" linear="yes"/>\n' + spine_items
         content_opf = CONTENT_OPF_TEMPLATE.format(
             book_title=book_title,
             author=author,
@@ -130,22 +135,32 @@ def create_epub():
             unique_id=unique_id,
             manifest_items=manifest_items,
             spine_items=spine_items,
-            cover_manifest=cover_meta
+            cover_meta=cover_meta
         )
-        with open(os.path.join('OEBPS', 'content.opf'), 'w', encoding='utf-8') as file:
-            file.write(content_opf)
+        content_opf_path = os.path.join('OEBPS', 'content.opf')
+        if not Path(content_opf_path).is_file():
+            with open(content_opf_path, 'w', encoding='utf-8') as file:
+                file.write(content_opf)
 
     def create_cover_page():
-        with open(os.path.join('OEBPS', 'cover.xhtml'), 'w', encoding='utf-8') as file:
-            file.write(COVER_XHTML)
+        cover_xhtml_path = os.path.join('OEBPS', 'cover.xhtml')
+        if not Path(cover_xhtml_path).is_file():
+            with open(cover_xhtml_path, 'w', encoding='utf-8') as file:
+                file.write(COVER_XHTML)
+        cover_image_path = os.path.join('OEBPS', 'cover.jpg')
+        if not Path(cover_image_path).is_file():
+            shutil.copy('cover.jpg', cover_image_path)
 
     def create_container_xml():
-        with open(os.path.join('META-INF', 'container.xml'), 'w', encoding='utf-8') as file:
-            file.write(CONTAINER_XML)
+        container_xml_path = os.path.join('META-INF', 'container.xml')
+        if not Path(container_xml_path).is_file():
+            with open(container_xml_path, 'w', encoding='utf-8') as file:
+                file.write(CONTAINER_XML)
 
     def create_mimetype_file():
-        with open('mimetype', 'w', encoding='utf-8') as file:
-            file.write('application/epub+zip')
+        if not Path('mimetype').is_file():
+            with open('mimetype', 'w', encoding='utf-8') as file:
+                file.write('application/epub+zip')
 
     def create_epub_file(output_file):
         with zipfile.ZipFile(output_file, 'w') as epub:
@@ -154,12 +169,12 @@ def create_epub():
                 for root, dirs, files in os.walk(folder_name):
                     for file in files:
                         file_path = os.path.join(root, file)
+                        if file_path == 'mimetype':
+                            continue
                         epub_path = os.path.relpath(file_path).replace('\\', '/')
                         epub.write(file_path, arcname=epub_path, compress_type=zipfile.ZIP_DEFLATED)
-            if cover_image:
-                epub.write('cover.jpg', arcname='OEBPS/cover.jpg', compress_type=zipfile.ZIP_DEFLATED)
 
-    if not os.path.exists('input.txt'):
+    if not Path('input.txt').is_file():
         print("Error: No 'input.txt' found in folder")
         sys.exit(1)
 
@@ -177,4 +192,6 @@ def create_epub():
     create_epub_file('output.epub')
     print("EPUB creation complete: output.epub")
 
-create_epub()
+if __name__ == "__main__":
+    create_epub()
+

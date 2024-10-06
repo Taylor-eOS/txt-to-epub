@@ -1,4 +1,5 @@
 # epub_strings.py
+
 STYLESHEET_CONTENT = '''body {
     font-family: Arial, sans-serif;
     line-height: 1.6;
@@ -30,7 +31,6 @@ blockquote {
     color: #555;
     margin-top: 0 !important;
 }'''
-
 
 CONTAINER_XML = '''<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -76,12 +76,12 @@ CONTENT_OPF_TEMPLATE = '''<?xml version="1.0" encoding="UTF-8"?>
     <dc:creator>{author}</dc:creator>
     <dc:language>{language}</dc:language>
     <dc:identifier id="BookID">urn:uuid:{unique_id}</dc:identifier>
+    {cover_meta}
   </metadata>
   <manifest>
     <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
     <item id="css" href="stylesheet.css" media-type="text/css"/>
     {manifest_items}
-    {cover_manifest}
   </manifest>
   <spine toc="ncx">
     {spine_items}
@@ -101,10 +101,3 @@ XHTML_TEMPLATE = '''<?xml version="1.0" encoding="UTF-8"?>
 </body>
 </html>'''
 
-TEMPLATE1 = '''<navPoint id="{nav_id}" playOrder="{play_order}">
-  <navLabel>
-    <text>{title}</text>
-  </navLabel>
-  <content src="{content_src}"/>
-</navPoint>
-'''
