@@ -5,7 +5,7 @@ import re
 import sys
 import shutil
 from pathlib import Path
-from utils import continues_block
+from utils import should_add_space
 from epub_strings import (
     STYLESHEET_CONTENT,
     CONTAINER_XML,
@@ -26,68 +26,82 @@ def create_epub():
         with open(txt_file, 'r', encoding='utf-8') as f:
             lines = f.readlines()
         chapters = []
-        chapter_data = {'title': None, 'body': [], 'footnotes': [], 'quotes': []}
+        chapter_data = {'title': None, 'blocks': [], 'footnotes': []}
         current_tag = None
-        for line in lines:
-            line = line.strip()
+        block_content = []
+        current_page = None
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
             if line.startswith('<h1>'):
-                if chapter_data['title']:
+                new_title = line[len('<h1>'):].strip()
+                if not chapter_data['blocks'] and not chapter_data['footnotes']:
+                    if chapter_data['title']:
+                        chapter_data['title'] += ' ' + new_title
+                    else:
+                        chapter_data['title'] = new_title
+                else:
                     chapters.append(chapter_data)
-                    chapter_data = {'title': None, 'body': [], 'footnotes': [], 'quotes': []}
-                chapter_data['title'] = line[4:].rstrip('</h1>')
-                current_tag = 'h1'
+                    chapter_data = {'title': new_title, 'blocks': [], 'footnotes': []}
+                current_tag = None
+                block_content = []
             elif line.startswith('<body>'):
                 current_tag = 'body'
-                body_content = line[6:].rstrip('</body>')
-                if body_content:
-                    chapter_data['body'].append(body_content)
+                block_content.append(line[len('<body>'):].strip())
             elif line.startswith('<footer>'):
                 current_tag = 'footer'
-                footer_content = line[8:].rstrip('</footer>')
-                if footer_content:
-                    chapter_data['footnotes'].append(footer_content)
+                block_content.append(line[len('<footer>'):].strip())
             elif line.startswith('<blockquote>'):
                 current_tag = 'blockquote'
-                quote_content = line[11:].rstrip('</blockquote>')
-                if quote_content:
-                    chapter_data['quotes'].append(quote_content)
-            else:
-                if current_tag == 'body':
-                    chapter_data['body'].append(line)
+                block_content.append(line[len('<blockquote>'):].strip())
+            elif line == '</end>':
+                i += 1
+                if i < len(lines):
+                    page_line = lines[i].strip()
+                    if page_line.startswith('<') and page_line.endswith('>'):
+                        page_number = page_line[1:-1]
+                        current_page = page_number
+                block_text = ' '.join(block_content)
+                if current_tag == 'body' or current_tag == 'blockquote':
+                    chapter_data['blocks'].append((current_tag, block_text, current_page))
                 elif current_tag == 'footer':
-                    chapter_data['footnotes'].append(line)
-                elif current_tag == 'blockquote':
-                    chapter_data['quotes'].append(line)
-        if chapter_data['title']:
+                    chapter_data['footnotes'].append(block_text)
+                block_content = []
+                current_tag = None
+            else:
+                if current_tag:
+                    block_content.append(line)
+            i += 1
+        if chapter_data['title'] or chapter_data['blocks'] or chapter_data['footnotes']:
             chapters.append(chapter_data)
         return chapters
-
-    def create_stylesheet():
-        stylesheet_path = os.path.join('OEBPS', 'stylesheet.css')
-        if not Path(stylesheet_path).is_file():
-            with open(stylesheet_path, 'w', encoding='utf-8') as file:
-                file.write(STYLESHEET_CONTENT.replace("margin: 0;", "margin: 0 !important;")
-                                              .replace("padding: 1em;", "padding: 0 !important;"))
 
     def create_chapter_files(chapters):
         for i, chapter in enumerate(chapters, start=1):
             content = ""
-            previous_sentence = ""
-            for block in chapter['body']:
-                sentences = re.split(r'(?<=[\.!\?])\s+', block)
-                for sentence in sentences:
-                    status = continues_block(previous_sentence, sentence)
-                    if status in ['continues_word', 'continues_sentence']:
-                        if content.endswith('</p>\n'):
-                            content = content[:-5] + ' ' + sentence + '</p>\n'
-                        else:
-                            content += sentence + ' '
+            previous_page = None
+            current_paragraph = ""
+            for block in chapter.get('blocks', []):
+                tag, block_text, current_page = block
+                block_text = block_text.strip()
+                if not block_text:
+                    continue
+                if tag == 'blockquote':
+                    if current_paragraph:
+                        content += f'<p>{current_paragraph.strip()}</p>\n'
+                        current_paragraph = ""
+                    content += f'<blockquote>{block_text}</blockquote>\n'
+                elif tag == 'body':
+                    if previous_page is not None and current_page is not None and previous_page != current_page:
+                        current_paragraph += ' ' + block_text
                     else:
-                        content += f'<p>{sentence}</p>\n'
-                    previous_sentence = sentence
-            for quote in chapter['quotes']:
-                content += f'<blockquote>{quote}</blockquote>\n'
-            if chapter['footnotes']:
+                        if current_paragraph:
+                            content += f'<p>{current_paragraph.strip()}</p>\n'
+                        current_paragraph = block_text
+                previous_page = current_page
+            if current_paragraph:
+                content += f'<p>{current_paragraph.strip()}</p>\n'
+            if chapter.get('footnotes'):
                 content += '<div class="footer">\n'
                 for footnote in chapter['footnotes']:
                     content += f'<p>{footnote}</p>\n'
@@ -95,9 +109,13 @@ def create_epub():
             xhtml_content = XHTML_TEMPLATE.format(title=chapter["title"], content=content)
             filename = f"chapter{i}.xhtml"
             chapter_path = os.path.join('OEBPS', filename)
-            if not Path(chapter_path).is_file():
-                with open(chapter_path, 'w', encoding='utf-8') as file:
-                    file.write(xhtml_content)
+            with open(chapter_path, 'w', encoding='utf-8') as file:
+                file.write(xhtml_content)
+
+    def create_stylesheet():
+        stylesheet_path = os.path.join('OEBPS', 'stylesheet.css')
+        with open(stylesheet_path, 'w', encoding='utf-8') as file:
+            file.write(STYLESHEET_CONTENT)
 
     def create_toc_ncx(chapters):
         nav_points = '\n'.join([
@@ -189,7 +207,10 @@ def create_epub():
         create_cover_page()
     create_toc_ncx(chapters)
     create_content_opf(chapters)
-    create_epub_file('output.epub')
+    create_epub_file('output_file.epub')
+    shutil.rmtree('OEBPS')
+    shutil.rmtree('META-INF')
+    os.remove('mimetype')
     print("EPUB creation complete: output.epub")
 
 if __name__ == "__main__":

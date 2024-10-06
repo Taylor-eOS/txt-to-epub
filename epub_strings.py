@@ -1,5 +1,3 @@
-# epub_strings.py
-
 STYLESHEET_CONTENT = '''body {
     font-family: Arial, sans-serif;
     line-height: 1.6;
@@ -10,17 +8,19 @@ STYLESHEET_CONTENT = '''body {
 h1, h2, h3 {
     text-align: center;
     font-weight: bold;
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
 p {
-    text-indent: 1.5em;
+    text-indent: 0 !important;
     margin: 0 !important;
+    padding: 0 !important;
 }
 
 blockquote {
     margin: 0 !important;
+    padding: 0 !important;
     font-style: italic;
     border-left: 4px solid #ccc;
     padding-left: 1em;
@@ -29,7 +29,8 @@ blockquote {
 .footer {
     font-size: 0.8em;
     color: #555;
-    margin-top: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }'''
 
 CONTAINER_XML = '''<?xml version="1.0" encoding="UTF-8"?>
