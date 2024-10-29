@@ -6,11 +6,15 @@
 </end>
 <1>
 
-<body>Normal sentence in the book.
+<body>N
 </end>
 <1>
 
-<footer>Footnote text.
+<body>ormal sentence in the book.
+</end>
+<1>
+
+<footer>1—Footnote text.
 </end>
 <1>
 
@@ -22,7 +26,7 @@
 </end>
 <2>
 
-<footer>Other footnote text.
+<footer>2—Other footnote text.
 </end>
 <2>
 
