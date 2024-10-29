@@ -2,18 +2,31 @@
 </end>
 <1>
 
-<body>Body text
+<h1>Second header
 </end>
 <1>
 
-<body>More body text
+<body>Normal sentence in the book.
+</end>
+<1>
+
+<footer>Footnote text.
+</end>
+<1>
+
+<body>Continued sentence on next page.
 </end>
 <2>
 
-<footer>Footnote
+<bodyquote>Quote starts here.
 </end>
 <2>
 
-<bodyquote>Quote
+<footer>Other footnote text.
 </end>
 <2>
+
+<bodyquote>Quote continues here.
+</end>
+<3>
+
