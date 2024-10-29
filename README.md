@@ -1,1 +1,1 @@
-This script takes blocks of text from an input file and wraps them into an EPUB output. It is a work in progress. The input can be extracted using [maual-classifier](https://github.com/Taylor-eOS/manual-classifier).
+This script takes blocks of text from an input file and wraps them into an EPUB output. It is a work in progress. The input can be extracted using [maual-classifier](https://github.com/Taylor-eOS/manual-classifier). Run the `pre_processing.py` first.
