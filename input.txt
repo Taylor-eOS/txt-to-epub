@@ -1,36 +1,32 @@
-<h1>CHAPTER 1
-</end>
+<h1>Chapter 1</h1>
 <1>
 
-<h1>Second header
-</end>
+<h2>Subheader</h2>
 <1>
 
-<body>N
-</end>
+<h3>Third level header</h3>
 <1>
 
-<body>ormal sentence in the book.
-</end>
+<body>T</body>
 <1>
 
-<footer>1—Footnote text.
-</end>
+<body>his is a sentence with a drop cap</body>
 <1>
 
-<body>Continued sentence on next page.
-</end>
+<footer>1—Footnote text.</footer>
+<1>
+
+<body>This is a normal sentence.</body>
 <2>
 
-<bodyquote>Quote starts here.
-</end>
+<body>Continued sentence on next page.</body>
 <2>
 
-<footer>2—Other footnote text.
-</end>
+<bodyquote>Quote starts here.</bodyquote>
 <2>
 
-<bodyquote>Quote continues here.
-</end>
+<footer>2—Other footnote text.</footer>
+<2>
+
+<bodyquote>Quote continues here.</bodyquote>
 <3>
-
