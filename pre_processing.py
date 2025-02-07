@@ -60,12 +60,10 @@ def process_text_block(block_lines, tag):
 def process_file(file_path='input.txt', output_path='input_pre.txt'):
     with open(file_path, 'r') as f:
         lines = f.readlines()
-    
     output_lines = []
     inside_block = False
     current_block_lines = []
     current_tag = None
-
     for line in lines:
         if not inside_block:
             found_tag = None
@@ -93,7 +91,6 @@ def process_file(file_path='input.txt', output_path='input_pre.txt'):
                 inside_block = False
                 current_block_lines = []
                 current_tag = None
-
     with open(output_path, 'w') as out_file:
         out_file.writelines(output_lines)
 
