@@ -4,7 +4,6 @@ from bs4 import BeautifulSoup
 import os
 
 def create_epub_from_textfile(input_path, metadata_path, cover_path='cover.jpg'):
-    #Load metadata
     with open(metadata_path, "r") as meta_file:
         metadata = json.load(meta_file)
     title = metadata.get("title", "Untitled Book")
@@ -12,7 +11,6 @@ def create_epub_from_textfile(input_path, metadata_path, cover_path='cover.jpg')
     identifier = metadata.get("identifier", "0012345678900")
     language = metadata.get("language", "en")
     output_path = f"{title}.epub"
-    #Initialize EPUB book
     book = epub.EpubBook()
     book.set_identifier(identifier)
     book.set_title(title)
@@ -111,8 +109,8 @@ def create_epub_from_textfile(input_path, metadata_path, cover_path='cover.jpg')
         elif element.name == 'footer':
             footnote_entries.append(f'<div class="footnote">{element.get_text()}</div>')
         elif current_chapter:
-            if element.name == 'bodyquote':
-                current_chapter.content += f'<blockquote>{element.get_text()}</blockquote>'
+            if element.name == 'blockquote':
+                current_chapter.content += " " + f'<blockquote>{element.get_text()}</blockquote>'
             else:
                 current_chapter.content += " " + str(element)
     finalize_chapter()
