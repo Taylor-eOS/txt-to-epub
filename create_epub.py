@@ -16,6 +16,7 @@ def create_epub_from_textfile(input_path, metadata_path, cover_path='cover.jpg')
     book.set_title(title)
     book.set_language(language)
     book.add_author(author)
+    
     css = epub.EpubItem(
         uid="style_base",
         file_name="style/base.css",
@@ -40,12 +41,15 @@ def create_epub_from_textfile(input_path, metadata_path, cover_path='cover.jpg')
         '''
     )
     book.add_item(css)
+    
     if os.path.exists(cover_path):
         with open(cover_path, "rb") as cover_file:
             book.set_cover("cover.jpg", cover_file.read())
-    #Parse input content
+    
+    # Parse input content
     with open(input_path, "r") as file:
         soup = BeautifulSoup(file.read(), "html.parser")
+    
     chapters = []
     toc_structure = []
     current_chapter = None
@@ -73,8 +77,9 @@ def create_epub_from_textfile(input_path, metadata_path, cover_path='cover.jpg')
             current_chapter.content += '</body>'
             chapters.append(current_chapter)
             book.add_item(current_chapter)
-    #Process elements
-    for element in soup.find_all(True):
+    
+    # Only process allowed content types: h1, h2, h3, body, footer, blockquote.
+    for element in soup.find_all(['h1', 'h2', 'h3', 'body', 'footer', 'blockquote']):
         if element.name == 'h1':
             finalize_chapter()
             current_chapter = create_chapter(element.get_text())
@@ -91,7 +96,7 @@ def create_epub_from_textfile(input_path, metadata_path, cover_path='cover.jpg')
             current_chapter.content += " " + str(element)
         elif element.name == 'h3' and current_chapter:
             if not toc_structure[-1][1]:
-                #Create dummy H2 if missing
+                # Create a dummy H2 if missing.
                 h2_id = "sec_0"
                 dummy_h2 = epub.Section("Section", f"{current_chapter.file_name}#{h2_id}")
                 current_h2 = (dummy_h2, [])
@@ -108,13 +113,15 @@ def create_epub_from_textfile(input_path, metadata_path, cover_path='cover.jpg')
             current_chapter.content += " " + str(element)
         elif element.name == 'footer':
             footnote_entries.append(f'<div class="footnote">{element.get_text()}</div>')
-        elif current_chapter:
-            if element.name == 'blockquote':
-                current_chapter.content += " " + f'<blockquote>{element.get_text()}</blockquote>'
-            else:
-                current_chapter.content += " " + str(element)
+        elif element.name == 'blockquote' and current_chapter:
+            current_chapter.content += " " + f'<blockquote>{element.get_text()}</blockquote>'
+        elif element.name == 'body' and current_chapter:
+            # If your input includes a <body> tag, append it as needed.
+            current_chapter.content += " " + str(element)
+    
     finalize_chapter()
-    #Build hierarchical TOC
+
+    # Build hierarchical TOC
     book.toc = tuple(
         (
             epub.Section(chap.title, chap.file_name),
@@ -126,12 +133,14 @@ def create_epub_from_textfile(input_path, metadata_path, cover_path='cover.jpg')
             ]
         ) for chap, h2_entries in toc_structure
     )
+    
     book.add_item(epub.EpubNcx())
     nav = epub.EpubNav()
     nav.add_item(css)
     book.add_item(nav)
     book.spine = ['nav'] + chapters
-    #Generate EPUB
+    
+    # Generate EPUB
     epub.write_epub(output_path, book, {})
     print(f"Created EPUB: {output_path}")
 
