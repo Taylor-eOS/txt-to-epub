@@ -1,7 +1,7 @@
 {
     "title": "Book Title",
     "author": "Author Name",
-    "identifier": "id123456789",
-    "language": "en"
+    "language": "en",
+    "isbn": ""
 }
 
